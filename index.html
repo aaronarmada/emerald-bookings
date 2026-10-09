@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JBDl4it/D5RtOcG0NwCv17x149DAhOUKelsMkUO5ri0='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#F7F4EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1C17" media="(prefers-color-scheme: dark)">
+<title>The Emerald Bookings</title>
+<meta property="og:title" content="The Emerald · Bookings">
+<meta property="og:description" content="Shared booking calendar">
+<meta property="og:image" content="https://aaronarmada.github.io/emerald-bookings/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230C3A2C'/%3E%3Cg transform='translate(9 18.5) scale(.46)' fill='none' stroke='%23D8BC85' stroke-linejoin='round'%3E%3Cpath d='M23.5 0H76.5L100 16.2V17.4L50 60.45L0 17.4V16.2Z' stroke-width='9'/%3E%3Cpath d='M0 16.8H100M37 17.4L50 60.45M63 17.4L50 60.45' stroke-width='6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+/* Layout: one house's booking ledger. Six month grids where each stay is a bar from check-in to check-out,
+   the stays listed underneath, and the owner's editing panel opening above the months. */
+:root {
+  --paper: #F7F4EC; --card: #FFFFFF; --ink: #23302A; --muted: #66706A; --rule: #E2DACB; --chip: #EFE8DA;
+  --bottle: #0C3A2C; --direct: #1E6B4F; --agent: #B08D57; --blocked: #A3A9A4; --brass: #8C6B3A; --today: #0C3A2C;
+  --bar-ink: #FFFFFF; --danger: #A23B2C; --focus: #B08D57;
+  --display: 'Bodoni Moda', 'Didot', 'Bodoni 72', Georgia, serif;
+  --ui: 'Jost', 'Futura', 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0F1C17; --card: #15261F; --ink: #ECE6D8; --muted: #A6B0A9; --rule: #273B32; --chip: #1C3229;
+    --bottle: #D8BC85; --direct: #3D9C74; --agent: #CDA86B; --blocked: #66706B; --brass: #D8BC85; --today: #D8BC85;
+    --bar-ink: #0F1C17; --danger: #EE8B78; --focus: #D8BC85; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0F1C17; --card: #15261F; --ink: #ECE6D8; --muted: #A6B0A9; --rule: #273B32; --chip: #1C3229;
+  --bottle: #D8BC85; --direct: #3D9C74; --agent: #CDA86B; --blocked: #66706B; --brass: #D8BC85; --today: #D8BC85;
+  --bar-ink: #0F1C17; --danger: #EE8B78; --focus: #D8BC85; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--ui); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 72px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 500; letter-spacing: 0.3em; color: var(--bottle); }
+.brand svg { display: block; }
+h1 { margin: 14px 0 0; font-family: var(--display); font-weight: 500; font-size: clamp(34px, 6vw, 46px); line-height: 1; letter-spacing: 0.02em; color: var(--bottle); text-wrap: balance; }
+.sub { margin-top: 8px; font-family: var(--display); font-style: italic; font-size: 17px; color: var(--brass); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { border: 1px solid var(--bottle); background: var(--bottle); color: var(--paper); border-radius: 999px; padding: 9px 18px; font-weight: 500; letter-spacing: 0.02em; }
+.btn.ghost { background: transparent; color: var(--bottle); }
+.btn.small { padding: 5px 12px; font-size: 13px; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #FFFFFF; }
+.btn[disabled] { opacity: 0.55; cursor: default; }
+.viewonly { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px; }
+
+.summary { margin-top: 26px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.stat { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.stat .k { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.stat .v { margin-top: 6px; font-size: 19px; font-weight: 500; color: var(--bottle); font-variant-numeric: tabular-nums; }
+.stat .n { margin-top: 2px; font-size: 13px; color: var(--muted); }
+
+.bar-key { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 22px; font-size: 13px; color: var(--muted); }
+.bar-key span { display: inline-flex; align-items: center; gap: 8px; }
+.swatch { width: 26px; height: 10px; border-radius: 5px; display: inline-block; }
+.s-direct { background: var(--direct); } .s-agent { background: var(--agent); }
+.s-blocked { background: repeating-linear-gradient(135deg, var(--blocked) 0 4px, transparent 4px 7px); border: 1px solid var(--blocked); }
+
+.panel { margin-top: 22px; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px 20px; }
+.panel h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 22px; color: var(--bottle); }
+.fields { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field label, .field .lbl { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.field input, .field select { border: 1px solid var(--rule); background: var(--paper); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.check { flex-direction: row; align-items: center; gap: 8px; padding-top: 22px; }
+.check label { letter-spacing: 0; text-transform: none; font-size: 14px; color: var(--ink); }
+.calc { margin-top: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.calc b { color: var(--ink); font-weight: 500; }
+.msg { margin-top: 10px; font-size: 14px; color: var(--danger); }
+.panel-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.status { font-size: 13px; color: var(--muted); }
+
+.nav { margin-top: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.nav .range { font-family: var(--display); font-size: 20px; color: var(--bottle); }
+.months { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+.month { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 14px 10px; min-width: 0; }
+.month h3 { margin: 0 0 10px; font-family: var(--display); font-weight: 500; font-size: 19px; color: var(--bottle); }
+.dow, .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.dow div { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); padding: 0 0 6px 6px; }
+.dow div.shab { color: var(--brass); }
+.week { position: relative; border-top: 1px solid var(--rule); }
+.day { height: 46px; padding: 4px 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); background: none; border: 0; text-align: left; display: block; width: 100%; }
+.day.blank { pointer-events: none; }
+.day.past { color: var(--muted); opacity: 0.6; }
+.day.today .num { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -3px 0 0 -4px; border-radius: 50%; border: 1.5px solid var(--today); font-weight: 500; }
+button.day:hover .num { text-decoration: underline; }
+.bar { position: absolute; bottom: 7px; height: 15px; border: 0; padding: 0 7px; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; line-height: 15px; color: var(--bar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.bar.direct { background: var(--direct); }
+.bar.agent { background: var(--agent); }
+.bar.blocked { background: repeating-linear-gradient(135deg, var(--blocked) 0 4px, transparent 4px 7px); border: 1px solid var(--blocked); color: transparent; }
+.bar.l { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.bar.r { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+
+.stays { margin-top: 34px; }
+.stays h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 26px; color: var(--bottle); }
+.list { margin-top: 10px; border-top: 1px solid var(--rule); }
+.stay { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule); }
+.stay .when { font-size: 16px; font-weight: 500; color: var(--bottle); font-variant-numeric: tabular-nums; }
+.stay .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.stay .money { font-size: 13.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stay .money .paid { color: var(--direct); font-weight: 500; }
+.stay .money .due { color: var(--brass); font-weight: 500; }
+.stay .ops { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.stay.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--chip); } to { background: transparent; } }
+.chip { display: inline-block; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 999px; padding: 2px 9px; margin-right: 6px; vertical-align: 1px; }
+.chip.direct { background: var(--direct); color: var(--bar-ink); }
+.chip.agent { background: var(--agent); color: var(--bar-ink); }
+.chip.blocked { background: var(--chip); color: var(--muted); }
+.empty { padding: 22px 0; color: var(--muted); border-bottom: 1px solid var(--rule); }
+details.past { margin-top: 18px; }
+details.past summary { cursor: pointer; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+.settings { margin-top: 34px; }
+.foot { margin-top: 34px; font-size: 13px; color: var(--muted); max-width: 640px; }
+@media (max-width: 560px) {
+  .stay { grid-template-columns: minmax(0, 1fr); }
+  .stay .ops { justify-content: flex-start; }
+  .day { height: 42px; }
+}
+@media (prefers-reduced-motion: reduce) { .stay.flash { animation: none; } }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+a { color: var(--brass); text-underline-offset: 3px; }
+.lock { max-width: 460px; margin: 0 auto; padding-inline: 20px; padding-block: 72px 48px; }
+.lock p { color: var(--muted); margin: 18px 0 0; }
+.lock form { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+.lock input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--rule); background: var(--card); border-radius: 999px; padding: 10px 16px; letter-spacing: 0.08em; }
+.loading { padding: 80px 20px; text-align: center; color: var(--muted); }
+.owner { margin-top: 26px; }
+.owner .fields { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.panel p { margin: 8px 0 0; font-size: 14px; color: var(--muted); max-width: 680px; }
+.panel p b { color: var(--ink); font-weight: 500; }
+.linkish { background: none; border: 0; padding: 0; color: var(--brass); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+.share { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button.day { display: flex; align-items: flex-start; justify-content: flex-start; }   /* buttons centre their label; keep the date at the top, clear of the stay bars */
+.share code { flex: 1 1 260px; min-width: 0; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; }
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Loading the calendar…</div></div>
+<script>
+(() => {
+  'use strict';
+  // The Emerald's booking calendar. The bookings live in data.json beside this page, encrypted with an access code:
+  // anyone with the code (or a link that carries it after the #) can read them. The owner saves changes straight to
+  // the GitHub repository that hosts the site, with a GitHub token kept only in their own browser.
+  const CONFIG = { owner: 'aaronarmada', repo: 'emerald-bookings', path: 'data.json', branch: 'main' };
+  const API = 'https://api.github.com/repos/' + CONFIG.owner + '/' + CONFIG.repo + '/contents/' + CONFIG.path;
+  const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new?name=Emerald+bookings&description=Saves+changes+to+the+Emerald+booking+calendar&target_name=' +
+    CONFIG.owner + '&expires_in=366&contents=write';
+  const ITERATIONS = 310000;
+
+  // ---------------------------------------------------------------- browser storage (conveniences only)
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('emerald-bookings:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('emerald-bookings:' + k, JSON.stringify(v)); } catch (e) { /* this browser keeps nothing */ } },
+    del(k) { try { localStorage.removeItem('emerald-bookings:' + k); } catch (e) { /* nothing to remove */ } },
+  };
+
+  // ---------------------------------------------------------------- the access code: AES-GCM, key from PBKDF2
+  // Codes are matched without case, spaces or dashes, so "abcd efgh" opens what "ABCD-EFGH" sealed.
+  const normCode = s => String(s || '').normalize('NFKC').toUpperCase().replace(/[\s‐-―-]+/g, '');
+  const showCode = c => /^[A-Z0-9]+$/.test(c) && c.length % 4 === 0 ? c.match(/.{4}/g).join('-') : c;
+  const te = new TextEncoder(), td = new TextDecoder();
+  const b64 = bytes => { let s = ''; const u = new Uint8Array(bytes); for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); };
+  const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function keyFor(secret, salt, iterations) {
+    const base = await crypto.subtle.importKey('raw', te.encode(normCode(secret)), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function seal(state, secret) {
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await keyFor(secret, salt, ITERATIONS);
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, te.encode(JSON.stringify(state)));
+    return { v: 1, kdf: 'PBKDF2-SHA256', iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), data: b64(ct) };
+  }
+  async function unseal(f, secret) {
+    const key = await keyFor(secret, unb64(f.salt), f.iterations);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(f.iv) }, key, unb64(f.data));
+    return JSON.parse(td.decode(pt));
+  }
+
+  // ---------------------------------------------------------------- state
+  let S = null, file = null, code = null, token = null, sha = null, lastLoad = 0;
+  let canWrite = false, editing = null, confirmDelete = null, saving = false, status = '', panelOpen = false;
+  let lockMsg = '', ownerOpen = false, ownerMsg = '', loadError = '';
+  const normalize = s => ({ agentName: s.agentName || 'Agent', rate: Number.isFinite(+s.rate) ? +s.rate : 20,
+                            bookings: Array.isArray(s.bookings) ? s.bookings : [], updated: s.updated || '' });
+
+  // ---------------------------------------------------------------- dates (all as YYYY-MM-DD, counted in UTC days)
+  const pad = n => String(n).padStart(2, '0');
+  const dayNum = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+  const fromNum = n => { const d = new Date(n * 864e5); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); };
+  const today = (() => { const t = new Date(); return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate()); })();
+  const TODAY = dayNum(today);
+  const nights = b => dayNum(b.out) - dayNum(b.in);
+  const fmt = (s, o) => new Date(dayNum(s) * 864e5).toLocaleDateString('en-US', Object.assign({ timeZone: 'UTC' }, o));
+  const fmtRange = b => {
+    const y1 = fmt(b.in, { year: 'numeric' }), y2 = fmt(b.out, { year: 'numeric' });
+    const d = s => fmt(s, { weekday: 'short', month: 'short', day: 'numeric' });
+    return y1 === y2 ? d(b.in) + ' – ' + d(b.out) + ', ' + y2 : d(b.in) + ', ' + y1 + ' – ' + d(b.out) + ', ' + y2;
+  };
+  const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n || 0);
+  const commission = b => b.by === 'agent' ? Math.round((+b.total || 0) * S.rate) / 100 : 0;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const label = by => by === 'agent' ? S.agentName : by === 'blocked' ? 'Blocked' : 'Direct';
+  const sorted = () => S.bookings.slice().sort((x, y) => dayNum(x.in) - dayNum(y.in));
+  const shareLink = () => location.origin + location.pathname + '#' + showCode(code);
+  const now = new Date();
+  let startMonth = store.get('start', now.getFullYear() * 12 + now.getMonth());   // months since year 0
+
+  const GEM = '<svg width="30" height="20" viewBox="-2 -2 104 64.5" aria-hidden="true"><path d="M23.5 0H76.5L100 16.2V17.4L50 60.45L0 17.4V16.2Z" fill="none" stroke="currentColor" stroke-width="4"/>' +
+    '<path d="M0 16.8H100M23.5 0L37 16.2M50 0L37 16.2M50 0L63 16.2M76.5 0L63 16.2M37 17.4L50 60.45M63 17.4L50 60.45" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
+
+  // ---------------------------------------------------------------- calendar
+  function monthHTML(m) {
+    const year = Math.floor(m / 12), month = m % 12;
+    const first = Date.UTC(year, month, 1) / 864e5, days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const lead = new Date(first * 864e5).getUTCDay();
+    const rows = Math.ceil((lead + days) / 7);
+    const name = new Date(first * 864e5).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+    let h = '<section class="month" aria-label="' + esc(name) + '"><h3>' + esc(name) + '</h3><div class="dow" aria-hidden="true">' +
+      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => '<div' + (i === 6 ? ' class="shab"' : '') + '>' + (i === 6 ? 'Shab' : d) + '</div>').join('') + '</div>';
+    for (let r = 0; r < rows; r++) {
+      h += '<div class="week">';
+      for (let c = 0; c < 7; c++) {
+        const i = r * 7 + c - lead;
+        if (i < 0 || i >= days) { h += '<div class="day blank"></div>'; continue; }
+        const n = first + i, iso = fromNum(n), cls = 'day' + (n < TODAY ? ' past' : '') + (n === TODAY ? ' today' : '');
+        h += canWrite
+          ? '<button type="button" class="' + cls + '" data-day="' + iso + '" aria-label="Add a booking from ' + esc(fmt(iso, { month: 'long', day: 'numeric' })) + '"><span class="num">' + (i + 1) + '</span></button>'
+          : '<div class="' + cls + '"><span class="num">' + (i + 1) + '</span></div>';
+      }
+      // stays: a bar from the middle of the check-in day to the middle of the check-out day, cut at the month's edges
+      const rowFirst = Math.max(0, r * 7 - lead), rowLast = Math.min(days - 1, r * 7 + 6 - lead);
+      const lo = first + rowFirst, hi = first + rowLast + 1;
+      for (const b of S.bookings) {
+        const a = dayNum(b.in) + 0.5, z = dayNum(b.out) + 0.5;
+        const s = Math.max(a, lo), e = Math.min(z, hi);
+        if (e <= s) continue;
+        const col0 = (s - first + lead) - r * 7, col1 = (e - first + lead) - r * 7;
+        const left = (col0 / 7 * 100).toFixed(3), width = ((col1 - col0) / 7 * 100).toFixed(3);
+        const cls = 'bar ' + b.by + (s === a ? ' l' : '') + (e === z ? ' r' : '');
+        const tip = label(b.by) + ': ' + fmtRange(b) + ' (' + nights(b) + (nights(b) === 1 ? ' night' : ' nights') + ')';
+        const text = s === a && col1 - col0 >= 1.6 ? esc(label(b.by)) : '';
+        h += '<button type="button" class="' + cls + '" style="left:' + left + '%;width:' + width + '%" data-stay="' + esc(b.id) + '" title="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + text + '</button>';
+      }
+      h += '</div>';
+    }
+    return h + '</section>';
+  }
+
+  // ---------------------------------------------------------------- the stays list
+  function stayHTML(b) {
+    const n = nights(b);
+    let cash = '';
+    if (b.by === 'agent') {
+      cash = '<div class="money">Total ' + money(b.total) + ' · ' + esc(S.agentName) + ' ' + S.rate + '% ' + money(commission(b)) +
+        ' · ' + (b.paid ? '<span class="paid">Paid</span>' : '<span class="due">Due</span>') + '</div>';
+    }
+    let ops = '';
+    if (canWrite) {
+      ops = confirmDelete === b.id
+        ? '<span class="status">Delete this stay?</span><button type="button" class="btn small danger" data-act="delete-yes" data-id="' + esc(b.id) + '">Delete</button><button type="button" class="btn small ghost" data-act="delete-no">Keep</button>'
+        : '<button type="button" class="btn small ghost" data-act="edit" data-id="' + esc(b.id) + '">Edit</button><button type="button" class="btn small ghost" data-act="delete" data-id="' + esc(b.id) + '">Delete</button>';
+    }
+    return '<div class="stay" id="stay-' + esc(b.id) + '"><div><div class="when">' + esc(fmtRange(b)) + '</div><div class="meta"><span class="chip ' + esc(b.by) + '">' + esc(label(b.by)) + '</span>' +
+      n + (n === 1 ? ' night' : ' nights') + (b.guest ? ' · ' + esc(b.guest) : '') + '</div></div>' + (cash || '<div></div>') + '<div class="ops">' + ops + '</div></div>';
+  }
+
+  function summaryHTML() {
+    const upcoming = sorted().filter(b => dayNum(b.out) > TODAY && b.by !== 'blocked');
+    const next = upcoming[0];
+    const winLo = Date.UTC(Math.floor(startMonth / 12), startMonth % 12, 1) / 864e5;
+    const winHi = Date.UTC(Math.floor((startMonth + 6) / 12), (startMonth + 6) % 12, 1) / 864e5;
+    let booked = 0;
+    for (const b of S.bookings) {
+      if (b.by === 'blocked') continue;
+      booked += Math.max(0, Math.min(dayNum(b.out), winHi) - Math.max(dayNum(b.in), winLo));
+    }
+    const agentStays = S.bookings.filter(b => b.by === 'agent');
+    const due = agentStays.filter(b => !b.paid).reduce((t, b) => t + commission(b), 0);
+    const paid = agentStays.filter(b => b.paid).reduce((t, b) => t + commission(b), 0);
+    return '<div class="summary">' +
+      '<div class="stat"><div class="k">' + (next && dayNum(next.in) <= TODAY ? 'Current stay' : 'Next stay') + '</div><div class="v">' + (next ? esc(fmt(next.in, { month: 'short', day: 'numeric' }) + ' – ' + fmt(next.out, { month: 'short', day: 'numeric' })) : 'None booked') +
+      '</div><div class="n">' + (next ? esc(label(next.by)) + ' · ' + nights(next) + (nights(next) === 1 ? ' night' : ' nights') : 'Open for bookings') + '</div></div>' +
+      '<div class="stat"><div class="k">Nights booked</div><div class="v">' + booked + '</div><div class="n">In the six months shown</div></div>' +
+      '<div class="stat"><div class="k">' + esc(S.agentName) + ' commission</div><div class="v">' + money(due) + ' due</div><div class="n">' + money(paid) + ' paid · ' + esc(S.rate) + '% of each stay he books</div></div>' +
+      '</div>';
+  }
+
+  // ---------------------------------------------------------------- the owner's editor
+  function panelHTML() {
+    const b = editing || {};
+    const by = b.by || 'direct';
+    return '<form class="panel" id="stay-form" novalidate><h2>' + (b.id ? 'Edit stay' : 'Add a booking') + '</h2><div class="fields">' +
+      '<div class="field"><label for="f-in">Check-in</label><input id="f-in" type="date" required value="' + esc(b.in || '') + '"></div>' +
+      '<div class="field"><label for="f-out">Check-out</label><input id="f-out" type="date" required value="' + esc(b.out || '') + '"></div>' +
+      '<div class="field"><label for="f-by">Booked by</label><select id="f-by">' +
+      ['direct', 'agent', 'blocked'].map(v => '<option value="' + v + '"' + (v === by ? ' selected' : '') + '>' + esc(v === 'blocked' ? 'Blocked (not available)' : label(v)) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label for="f-guest">Guest or note</label><input id="f-guest" type="text" maxlength="80" value="' + esc(b.guest || '') + '" placeholder="Optional"></div>' +
+      '<div class="field agent-only"><label for="f-total">Total for the stay</label><input id="f-total" type="number" min="0" step="1" inputmode="decimal" value="' + esc(b.total == null ? '' : b.total) + '" placeholder="$"></div>' +
+      '<div class="field check agent-only"><input id="f-paid" type="checkbox"' + (b.paid ? ' checked' : '') + '><label for="f-paid">Commission paid</label></div>' +
+      '</div><div class="calc" id="f-calc"></div><div class="msg" id="f-msg" role="alert"></div>' +
+      '<div class="panel-actions"><button type="submit" class="btn" id="f-save"' + (saving ? ' disabled' : '') + '>' + (saving ? 'Saving…' : 'Save') + '</button>' +
+      '<button type="button" class="btn ghost" data-act="cancel">Cancel</button><span class="status">' + esc(status) + '</span></div></form>';
+  }
+
+  function settingsHTML() {
+    return '<section class="panel settings" aria-label="Sharing"><h2>Sharing</h2>' +
+      '<p>Send this link to anyone who should see the calendar; it opens straight in. The address without the part after # asks for the access code, <b>' + esc(showCode(code)) + '</b>.</p>' +
+      '<div class="share"><code id="share-link">' + esc(shareLink()) + '</code><button type="button" class="btn small ghost" data-act="copy">Copy link</button></div></section>' +
+      '<form class="panel settings" id="settings-form" novalidate><h2>Settings</h2><div class="fields">' +
+      '<div class="field"><label for="s-agent">Agent’s name</label><input id="s-agent" type="text" maxlength="40" value="' + esc(S.agentName) + '"></div>' +
+      '<div class="field"><label for="s-rate">Commission %</label><input id="s-rate" type="number" min="0" max="100" step="0.5" value="' + esc(S.rate) + '"></div>' +
+      '</div><div class="panel-actions"><button type="submit" class="btn ghost"' + (saving ? ' disabled' : '') + '>Save settings</button></div></form>' +
+      '<form class="panel settings" id="code-form" novalidate><h2>Access code</h2><p>A new code locks out the old code and the old link. Send the new link to anyone who should keep seeing the calendar.</p><div class="fields">' +
+      '<div class="field"><label for="c-new">New access code</label><input id="c-new" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters"></div>' +
+      '<div class="field"><label for="c-again">Type it again</label><input id="c-again" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters"></div>' +
+      '</div><div class="msg" id="c-msg" role="alert"></div><div class="panel-actions"><button type="submit" class="btn ghost"' + (saving ? ' disabled' : '') + '>Change access code</button></div></form>';
+  }
+
+  function ownerHTML() {
+    if (canWrite) return '<section class="owner"><button type="button" class="linkish" data-act="sign-out">Stop editing on this device</button></section>';
+    if (!ownerOpen) return '<section class="owner"><button type="button" class="linkish" data-act="owner">Owner sign-in</button></section>';
+    return '<form class="panel owner" id="owner-form" novalidate><h2>Owner sign-in</h2>' +
+      '<p>Editing needs a GitHub token that can save to <b>' + esc(CONFIG.owner + '/' + CONFIG.repo) + '</b>. <a href="' + esc(TOKEN_URL) + '" target="_blank" rel="noopener noreferrer">Create one on GitHub</a>; ' +
+      'it opens filled in. Under Repository access, choose <b>Only select repositories</b> and pick <b>' + esc(CONFIG.repo) + '</b>, then click Generate token and paste it here. It stays in this browser.</p>' +
+      '<div class="fields"><div class="field"><label for="o-token">GitHub token</label><input id="o-token" type="password" autocomplete="off" spellcheck="false"></div></div>' +
+      '<div class="msg" role="alert">' + esc(ownerMsg) + '</div><div class="panel-actions"><button type="submit" class="btn">Sign in</button>' +
+      '<button type="button" class="btn ghost" data-act="owner-cancel">Cancel</button></div></form>';
+  }
+
+  function readForm() {
+    const v = id => document.getElementById(id);
+    return { in: v('f-in').value, out: v('f-out').value, by: v('f-by').value, guest: v('f-guest').value.trim(),
+             total: v('f-total').value === '' ? null : Math.max(0, +v('f-total').value), paid: v('f-paid').checked };
+  }
+
+  function check(f) {
+    if (!f.in || !f.out) return 'Pick a check-in and a check-out date.';
+    if (dayNum(f.out) <= dayNum(f.in)) return 'Check-out has to be after check-in.';
+    if (f.by === 'agent' && (f.total == null || !(f.total > 0))) return 'Enter the total for the stay, so the commission can be worked out.';
+    const clash = S.bookings.find(b => (!editing || b.id !== editing.id) && dayNum(b.in) < dayNum(f.out) && dayNum(f.in) < dayNum(b.out));
+    if (clash) return 'Those dates overlap ' + label(clash.by) + ', ' + fmtRange(clash) + '. Edit that stay instead, or pick other dates.';
+    return '';
+  }
+
+  function updateCalc() {
+    const form = document.getElementById('stay-form');
+    if (!form) return;
+    const f = readForm();
+    form.querySelectorAll('.agent-only').forEach(el => { el.hidden = f.by !== 'agent'; });
+    const parts = [];
+    if (f.in && f.out && dayNum(f.out) > dayNum(f.in)) { const n = dayNum(f.out) - dayNum(f.in); parts.push('<b>' + n + (n === 1 ? ' night' : ' nights') + '</b>'); }
+    if (f.by === 'agent' && f.total > 0) parts.push(esc(S.agentName) + '’s ' + esc(S.rate) + '%: <b>' + money(Math.round(f.total * S.rate) / 100) + '</b>');
+    document.getElementById('f-calc').innerHTML = parts.join(' · ');
+  }
+
+  // ---------------------------------------------------------------- loading and saving
+  const ghHeaders = () => ({ 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' });
+
+  async function loadPublished() {   // what everyone reads: the copy GitHub Pages serves
+    const r = await fetch(CONFIG.path + '?v=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    lastLoad = Date.now();
+    return r.json();
+  }
+
+  async function loadFromGitHub() {   // the owner reads the repository itself: always current, with the sha to save over
+    const r = await fetch(API + '?ref=' + encodeURIComponent(CONFIG.branch) + '&t=' + Date.now(), { headers: ghHeaders(), cache: 'no-store' });
+    if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+    const j = await r.json();
+    sha = j.sha; lastLoad = Date.now();
+    return JSON.parse(atob(j.content.replace(/\s/g, '')));
+  }
+
+  async function tryCode(c) {
+    try { S = normalize(await unseal(file, c)); code = normCode(c); store.set('code', code); lockMsg = ''; return true; }
+    catch (e) { return false; }
+  }
+
+  async function signInOwner(t) {
+    token = t;
+    try {
+      const fresh = await loadFromGitHub();
+      S = normalize(await unseal(fresh, code));
+      file = fresh; canWrite = true; ownerOpen = false; ownerMsg = '';
+      store.set('token', token);
+    } catch (e) {
+      const refused = e && (e.status === 401 || e.status === 403 || e.status === 404);
+      canWrite = false; token = null; sha = null; ownerOpen = true;
+      if (refused) store.del('token');   // a dropped connection keeps the saved token for next time
+      ownerMsg = refused
+        ? 'GitHub didn’t accept that token for ' + CONFIG.owner + '/' + CONFIG.repo + '. Check that it has Contents: Read and write on that repository.'
+        : e && e.name === 'OperationError'
+          ? 'The access code changed a moment ago. Reload the page in a minute and enter the new code.'
+          : 'Couldn’t reach GitHub. Check your connection and try again.';
+    }
+  }
+
+  async function save(next, newCode) {
+    if (!canWrite || saving) return false;
+    saving = true; status = 'Saving…'; render();
+    next.updated = new Date().toISOString();
+    let ok = false;
+    try {
+      const sealed = await seal(next, newCode || code);
+      const body = { message: newCode ? 'Change the access code' : 'Update bookings', content: btoa(JSON.stringify(sealed, null, 1) + '\n'), sha, branch: CONFIG.branch };
+      const r = await fetch(API, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()), body: JSON.stringify(body) });
+      if (r.ok) {
+        const j = await r.json();
+        sha = j.content.sha; file = sealed; S = normalize(next); ok = true;
+        if (newCode) { code = normCode(newCode); store.set('code', code); }
+        status = 'Saved. The shared link shows it within a minute or two.';
+        panelOpen = false; editing = null;
+      } else if (r.status === 409 || r.status === 422) {
+        try { S = normalize(await unseal(file = await loadFromGitHub(), code)); } catch (e) { /* keep what we have */ }
+        status = 'The calendar was changed somewhere else, so it has been reloaded. Make your change again.';
+      } else if (r.status === 401 || r.status === 403 || r.status === 404) {
+        canWrite = false; token = null; store.del('token'); panelOpen = false;
+        status = 'GitHub refused the save. Sign in again with a token that has Contents: Read and write on ' + CONFIG.repo + '.';
+      } else {
+        status = 'Couldn’t save (GitHub answered ' + r.status + '). Try again in a moment.';
+      }
+    } catch (e) {
+      status = 'Couldn’t save. Check your connection and try again.';
+    }
+    saving = false; render();
+    return ok;
+  }
+
+  // ---------------------------------------------------------------- render
+  function header(right) {
+    const updated = S && S.updated ? new Date(S.updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    return '<header class="top"><div><div class="brand">' + GEM + 'THE EMERALD</div>' +
+      '<h1>Bookings</h1><div class="sub">Shared calendar · North Miami Beach' + (updated ? ' · updated ' + esc(updated) : '') + '</div></div>' +
+      '<div class="actions">' + right + '</div></header>';
+  }
+
+  function renderLock() {
+    document.getElementById('root').innerHTML = '<div class="lock">' + header('') +
+      '<p>Enter the access code to see the calendar.</p><form id="lock-form" novalidate>' +
+      '<input id="l-code" type="password" autocomplete="current-password" autocapitalize="characters" spellcheck="false" aria-label="Access code" placeholder="Access code">' +
+      '<button type="submit" class="btn">Open</button></form><div class="msg" role="alert">' + esc(lockMsg) + '</div></div>';
+    const i = document.getElementById('l-code'); if (i) i.focus();
+  }
+
+  function render() {
+    const root = document.getElementById('root');
+    if (loadError) { root.innerHTML = '<div class="lock">' + header('') + '<p>' + esc(loadError) + '</p></div>'; return; }
+    if (!S) { renderLock(); return; }
+    const keep = document.activeElement && document.activeElement.id;
+    const draft = document.getElementById('stay-form') ? readForm() : null;
+    const months = [];
+    for (let i = 0; i < 6; i++) months.push(monthHTML(startMonth + i));
+    const lo = new Date(Date.UTC(Math.floor(startMonth / 12), startMonth % 12, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: 'numeric' });
+    const hiM = startMonth + 5;
+    const hi = new Date(Date.UTC(Math.floor(hiM / 12), hiM % 12, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: 'numeric' });
+    const list = sorted();
+    const upcoming = list.filter(b => dayNum(b.out) > TODAY), past = list.filter(b => dayNum(b.out) <= TODAY).reverse();
+    root.innerHTML = '<div class="wrap">' +
+      header((status && !(canWrite && panelOpen) ? '<span class="status">' + esc(status) + '</span>' : '') +
+             (canWrite ? '<button type="button" class="btn" data-act="add">Add booking</button>' : '<span class="viewonly">View only</span>')) +
+      (canWrite && panelOpen ? panelHTML() : '') +
+      summaryHTML() +
+      '<div class="bar-key"><span><i class="swatch s-direct"></i>Direct</span><span><i class="swatch s-agent"></i>' + esc(S.agentName) + '</span><span><i class="swatch s-blocked"></i>Blocked</span>' +
+      '<span>Bars run from check-in to check-out, so a check-out day is open for the next check-in.</span></div>' +
+      '<div class="nav"><button type="button" class="btn ghost small" data-act="prev" aria-label="Earlier months">‹ Earlier</button><div class="range">' + esc(lo) + ' – ' + esc(hi) + '</div>' +
+      '<div class="actions"><button type="button" class="btn ghost small" data-act="now">This month</button><button type="button" class="btn ghost small" data-act="next" aria-label="Later months">Later ›</button></div></div>' +
+      '<div class="months">' + months.join('') + '</div>' +
+      '<section class="stays" aria-label="Stays"><h2>Stays</h2><div class="list">' +
+      (upcoming.length ? upcoming.map(stayHTML).join('') : '<div class="empty">' + (canWrite ? 'No upcoming stays. Add one with Add booking, or tap a date on the calendar.' : 'No upcoming stays are booked yet.') + '</div>') +
+      '</div>' + (past.length ? '<details class="past"><summary>Past stays (' + past.length + ')</summary><div class="list">' + past.map(stayHTML).join('') + '</div></details>' : '') + '</section>' +
+      (canWrite ? settingsHTML() : '') +
+      '<p class="foot">' + (canWrite ? 'Everyone with the link or the access code sees every date and note here, and the totals and commission on ' + esc(S.agentName) + '’s stays.' :
+        'Dates shown here are booked or blocked. A check-out day is free for a new check-in.') + '</p>' +
+      ownerHTML() + '</div>';
+    if (draft && canWrite && panelOpen) {
+      const v = id => document.getElementById(id);
+      v('f-in').value = draft.in; v('f-out').value = draft.out; v('f-by').value = draft.by; v('f-guest').value = draft.guest;
+      v('f-total').value = draft.total == null ? '' : draft.total; v('f-paid').checked = draft.paid;
+    }
+    updateCalc();
+    if (keep && document.getElementById(keep)) document.getElementById(keep).focus();
+  }
+
+  // ---------------------------------------------------------------- events
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('[data-act],[data-day],[data-stay]');
+    if (!t) return;
+    const act = t.dataset.act;
+    if (t.dataset.stay && !act) {
+      const row = document.getElementById('stay-' + t.dataset.stay);
+      if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }
+      return;
+    }
+    if (t.dataset.day && canWrite) {
+      editing = { in: t.dataset.day, out: fromNum(dayNum(t.dataset.day) + 1), by: 'direct' };
+      panelOpen = true; status = ''; render(); window.scrollTo({ top: 0, behavior: 'smooth' });
+      const f = document.getElementById('f-out'); if (f) f.focus();
+      return;
+    }
+    if (act === 'prev' || act === 'next' || act === 'now') {
+      startMonth = act === 'now' ? now.getFullYear() * 12 + now.getMonth() : startMonth + (act === 'prev' ? -6 : 6);
+      store.set('start', startMonth); render(); return;
+    }
+    if (act === 'owner') { ownerOpen = true; ownerMsg = ''; render(); const i = document.getElementById('o-token'); if (i) i.focus(); return; }
+    if (act === 'owner-cancel') { ownerOpen = false; render(); return; }
+    if (!canWrite) return;
+    if (act === 'copy') {
+      let copied = false;
+      try { await navigator.clipboard.writeText(shareLink()); copied = true; } catch (err) { /* select it instead */ }
+      if (!copied) { const r = document.createRange(); r.selectNodeContents(document.getElementById('share-link')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      t.textContent = copied ? 'Copied' : 'Selected, copy it';
+      setTimeout(() => { if (t.isConnected) t.textContent = 'Copy link'; }, 2000);
+    }
+    else if (act === 'sign-out') { canWrite = false; token = null; sha = null; store.del('token'); panelOpen = false; status = ''; render(); }
+    else if (act === 'add') { editing = null; panelOpen = true; status = ''; render(); document.getElementById('f-in').focus(); }
+    else if (act === 'cancel') { panelOpen = false; editing = null; status = ''; render(); }
+    else if (act === 'edit') { editing = Object.assign({}, S.bookings.find(b => b.id === t.dataset.id)); panelOpen = true; status = ''; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    else if (act === 'delete') { confirmDelete = t.dataset.id; render(); }
+    else if (act === 'delete-no') { confirmDelete = null; render(); }
+    else if (act === 'delete-yes') {
+      const next = JSON.parse(JSON.stringify(S));
+      next.bookings = next.bookings.filter(b => b.id !== t.dataset.id);
+      confirmDelete = null; save(next);
+    }
+  });
+
+  document.addEventListener('input', e => { if (e.target.closest('#stay-form')) updateCalc(); });
+  document.addEventListener('change', e => { if (e.target.closest('#stay-form')) updateCalc(); });
+
+  document.addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = e.target.id;
+    if (id === 'lock-form') {
+      const tried = document.getElementById('l-code').value;
+      if (!normCode(tried)) return;
+      lockMsg = 'Opening…'; renderLock();
+      if (!(await tryCode(tried))) lockMsg = 'That code didn’t open the calendar. Check it and try again.';
+      else if (store.get('token', null)) await signInOwner(store.get('token', null));
+      render();
+      return;
+    }
+    if (id === 'owner-form') {
+      const t = document.getElementById('o-token').value.trim();
+      if (!t) return;
+      ownerMsg = 'Checking…'; render();
+      await signInOwner(t);
+      render();
+      return;
+    }
+    if (!canWrite) return;
+    if (id === 'stay-form') {
+      const f = readForm(), problem = check(f);
+      document.getElementById('f-msg').textContent = problem;
+      if (problem) return;
+      const next = JSON.parse(JSON.stringify(S));
+      const row = { id: editing && editing.id ? editing.id : 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    in: f.in, out: f.out, by: f.by, guest: f.guest };
+      if (f.by === 'agent') { row.total = f.total; row.paid = f.paid; }
+      next.bookings = next.bookings.filter(b => b.id !== row.id).concat([row]);
+      save(next);
+    } else if (id === 'settings-form') {
+      const name = document.getElementById('s-agent').value.trim(), rate = +document.getElementById('s-rate').value;
+      if (!name || !(rate >= 0 && rate <= 100)) return;
+      const next = JSON.parse(JSON.stringify(S));
+      next.agentName = name; next.rate = rate;
+      save(next);
+    } else if (id === 'code-form') {
+      const a = document.getElementById('c-new').value, b = document.getElementById('c-again').value;
+      const msg = document.getElementById('c-msg');
+      if (normCode(a).length < 10) { msg.textContent = 'Use at least 10 letters or digits.'; return; }
+      if (normCode(a) !== normCode(b)) { msg.textContent = 'The two entries don’t match.'; return; }
+      const ok = await save(JSON.parse(JSON.stringify(S)), a);
+      if (ok) status = 'Access code changed. Copy the new link under Sharing and send it on.';
+      render();
+    }
+  });
+
+  // Coming back to the page after a while picks up changes made elsewhere.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !S || saving || panelOpen || Date.now() - lastLoad < 60000) return;
+    try {
+      const fresh = canWrite ? await loadFromGitHub() : await loadPublished();
+      if (file && fresh.data === file.data) return;
+      try { S = normalize(await unseal(fresh, code)); file = fresh; }
+      catch (err) { if (canWrite) return; S = null; file = fresh; store.del('code'); lockMsg = 'The access code has changed. Enter the new one.'; }
+      render();
+    } catch (err) { /* keep showing what we have */ }
+  });
+
+  // ---------------------------------------------------------------- start
+  (async () => {
+    let fromLink = '';
+    if (location.hash.length > 1) {   // a shared link carries the code after the #, which never leaves this browser
+      try { fromLink = decodeURIComponent(location.hash.slice(1)); } catch (e) { fromLink = location.hash.slice(1); }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* leave the address as it is */ }
+    }
+    try { file = await loadPublished(); }
+    catch (e) { loadError = 'Couldn’t load the calendar. Check your connection and reload the page.'; render(); return; }
+    if (!(fromLink && await tryCode(fromLink))) {
+      if (fromLink) lockMsg = 'The code in that link didn’t open the calendar. Enter the current access code.';
+      const saved = store.get('code', null);
+      if (saved && !(await tryCode(saved))) { store.del('code'); if (!fromLink) lockMsg = 'The access code has changed. Enter the new one.'; }
+    }
+    const t = store.get('token', null);
+    if (S && t) await signInOwner(t);
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
