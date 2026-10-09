@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JBDl4it/D5RtOcG0NwCv17x149DAhOUKelsMkUO5ri0='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HgpqJg8SnmqHvpL5EBqKxXlviO8CWAn/xfYa4aVlmbA='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#F7F4EC" media="(prefers-color-scheme: light)">
@@ -80,8 +80,6 @@ h1 { margin: 14px 0 0; font-family: var(--display); font-weight: 500; font-size:
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .field label, .field .lbl { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
 .field input, .field select { border: 1px solid var(--rule); background: var(--paper); border-radius: 8px; padding: 8px 10px; min-width: 0; }
-.check { flex-direction: row; align-items: center; gap: 8px; padding-top: 22px; }
-.check label { letter-spacing: 0; text-transform: none; font-size: 14px; color: var(--ink); }
 .calc { margin-top: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .calc b { color: var(--ink); font-weight: 500; }
 .msg { margin-top: 10px; font-size: 14px; color: var(--danger); }
@@ -112,12 +110,9 @@ button.day:hover .num { text-decoration: underline; }
 .stays { margin-top: 34px; }
 .stays h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 26px; color: var(--bottle); }
 .list { margin-top: 10px; border-top: 1px solid var(--rule); }
-.stay { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule); }
+.stay { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--rule); }
 .stay .when { font-size: 16px; font-weight: 500; color: var(--bottle); font-variant-numeric: tabular-nums; }
 .stay .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.stay .money { font-size: 13.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.stay .money .paid { color: var(--direct); font-weight: 500; }
-.stay .money .due { color: var(--brass); font-weight: 500; }
 .stay .ops { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .stay.flash { animation: flash 1.6s ease-out; }
 @keyframes flash { from { background: var(--chip); } to { background: transparent; } }
@@ -204,8 +199,9 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
   let S = null, file = null, code = null, token = null, sha = null, lastLoad = 0;
   let canWrite = false, editing = null, confirmDelete = null, saving = false, status = '', panelOpen = false;
   let lockMsg = '', ownerOpen = false, ownerMsg = '', loadError = '';
-  const normalize = s => ({ agentName: s.agentName || 'Agent', rate: Number.isFinite(+s.rate) ? +s.rate : 20,
-                            bookings: Array.isArray(s.bookings) ? s.bookings : [], updated: s.updated || '' });
+  const normalize = s => ({ agentName: s.agentName || 'Agent',   // availability only: older saves' money fields are dropped
+                            bookings: (Array.isArray(s.bookings) ? s.bookings : []).map(b => ({ id: b.id, in: b.in, out: b.out, by: b.by, guest: b.guest || '' })),
+                            updated: s.updated || '' });
 
   // ---------------------------------------------------------------- dates (all as YYYY-MM-DD, counted in UTC days)
   const pad = n => String(n).padStart(2, '0');
@@ -220,8 +216,6 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
     const d = s => fmt(s, { weekday: 'short', month: 'short', day: 'numeric' });
     return y1 === y2 ? d(b.in) + ' – ' + d(b.out) + ', ' + y2 : d(b.in) + ', ' + y1 + ' – ' + d(b.out) + ', ' + y2;
   };
-  const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n || 0);
-  const commission = b => b.by === 'agent' ? Math.round((+b.total || 0) * S.rate) / 100 : 0;
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const label = by => by === 'agent' ? S.agentName : by === 'blocked' ? 'Blocked' : 'Direct';
   const sorted = () => S.bookings.slice().sort((x, y) => dayNum(x.in) - dayNum(y.in));
@@ -273,11 +267,6 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
   // ---------------------------------------------------------------- the stays list
   function stayHTML(b) {
     const n = nights(b);
-    let cash = '';
-    if (b.by === 'agent') {
-      cash = '<div class="money">Total ' + money(b.total) + ' · ' + esc(S.agentName) + ' ' + S.rate + '% ' + money(commission(b)) +
-        ' · ' + (b.paid ? '<span class="paid">Paid</span>' : '<span class="due">Due</span>') + '</div>';
-    }
     let ops = '';
     if (canWrite) {
       ops = confirmDelete === b.id
@@ -285,7 +274,7 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
         : '<button type="button" class="btn small ghost" data-act="edit" data-id="' + esc(b.id) + '">Edit</button><button type="button" class="btn small ghost" data-act="delete" data-id="' + esc(b.id) + '">Delete</button>';
     }
     return '<div class="stay" id="stay-' + esc(b.id) + '"><div><div class="when">' + esc(fmtRange(b)) + '</div><div class="meta"><span class="chip ' + esc(b.by) + '">' + esc(label(b.by)) + '</span>' +
-      n + (n === 1 ? ' night' : ' nights') + (b.guest ? ' · ' + esc(b.guest) : '') + '</div></div>' + (cash || '<div></div>') + '<div class="ops">' + ops + '</div></div>';
+      n + (n === 1 ? ' night' : ' nights') + (b.guest ? ' · ' + esc(b.guest) : '') + '</div></div><div class="ops">' + ops + '</div></div>';
   }
 
   function summaryHTML() {
@@ -298,14 +287,10 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       if (b.by === 'blocked') continue;
       booked += Math.max(0, Math.min(dayNum(b.out), winHi) - Math.max(dayNum(b.in), winLo));
     }
-    const agentStays = S.bookings.filter(b => b.by === 'agent');
-    const due = agentStays.filter(b => !b.paid).reduce((t, b) => t + commission(b), 0);
-    const paid = agentStays.filter(b => b.paid).reduce((t, b) => t + commission(b), 0);
     return '<div class="summary">' +
       '<div class="stat"><div class="k">' + (next && dayNum(next.in) <= TODAY ? 'Current stay' : 'Next stay') + '</div><div class="v">' + (next ? esc(fmt(next.in, { month: 'short', day: 'numeric' }) + ' – ' + fmt(next.out, { month: 'short', day: 'numeric' })) : 'None booked') +
       '</div><div class="n">' + (next ? esc(label(next.by)) + ' · ' + nights(next) + (nights(next) === 1 ? ' night' : ' nights') : 'Open for bookings') + '</div></div>' +
       '<div class="stat"><div class="k">Nights booked</div><div class="v">' + booked + '</div><div class="n">In the six months shown</div></div>' +
-      '<div class="stat"><div class="k">' + esc(S.agentName) + ' commission</div><div class="v">' + money(due) + ' due</div><div class="n">' + money(paid) + ' paid · ' + esc(S.rate) + '% of each stay he books</div></div>' +
       '</div>';
   }
 
@@ -319,8 +304,6 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       '<div class="field"><label for="f-by">Booked by</label><select id="f-by">' +
       ['direct', 'agent', 'blocked'].map(v => '<option value="' + v + '"' + (v === by ? ' selected' : '') + '>' + esc(v === 'blocked' ? 'Blocked (not available)' : label(v)) + '</option>').join('') + '</select></div>' +
       '<div class="field"><label for="f-guest">Guest or note</label><input id="f-guest" type="text" maxlength="80" value="' + esc(b.guest || '') + '" placeholder="Optional"></div>' +
-      '<div class="field agent-only"><label for="f-total">Total for the stay</label><input id="f-total" type="number" min="0" step="1" inputmode="decimal" value="' + esc(b.total == null ? '' : b.total) + '" placeholder="$"></div>' +
-      '<div class="field check agent-only"><input id="f-paid" type="checkbox"' + (b.paid ? ' checked' : '') + '><label for="f-paid">Commission paid</label></div>' +
       '</div><div class="calc" id="f-calc"></div><div class="msg" id="f-msg" role="alert"></div>' +
       '<div class="panel-actions"><button type="submit" class="btn" id="f-save"' + (saving ? ' disabled' : '') + '>' + (saving ? 'Saving…' : 'Save') + '</button>' +
       '<button type="button" class="btn ghost" data-act="cancel">Cancel</button><span class="status">' + esc(status) + '</span></div></form>';
@@ -332,7 +315,6 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       '<div class="share"><code id="share-link">' + esc(shareLink()) + '</code><button type="button" class="btn small ghost" data-act="copy">Copy link</button></div></section>' +
       '<form class="panel settings" id="settings-form" novalidate><h2>Settings</h2><div class="fields">' +
       '<div class="field"><label for="s-agent">Agent’s name</label><input id="s-agent" type="text" maxlength="40" value="' + esc(S.agentName) + '"></div>' +
-      '<div class="field"><label for="s-rate">Commission %</label><input id="s-rate" type="number" min="0" max="100" step="0.5" value="' + esc(S.rate) + '"></div>' +
       '</div><div class="panel-actions"><button type="submit" class="btn ghost"' + (saving ? ' disabled' : '') + '>Save settings</button></div></form>' +
       '<form class="panel settings" id="code-form" novalidate><h2>Access code</h2><p>A new code locks out the old code and the old link. Send the new link to anyone who should keep seeing the calendar.</p><div class="fields">' +
       '<div class="field"><label for="c-new">New access code</label><input id="c-new" type="text" autocomplete="off" spellcheck="false" autocapitalize="characters"></div>' +
@@ -353,14 +335,12 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
 
   function readForm() {
     const v = id => document.getElementById(id);
-    return { in: v('f-in').value, out: v('f-out').value, by: v('f-by').value, guest: v('f-guest').value.trim(),
-             total: v('f-total').value === '' ? null : Math.max(0, +v('f-total').value), paid: v('f-paid').checked };
+    return { in: v('f-in').value, out: v('f-out').value, by: v('f-by').value, guest: v('f-guest').value.trim() };
   }
 
   function check(f) {
     if (!f.in || !f.out) return 'Pick a check-in and a check-out date.';
     if (dayNum(f.out) <= dayNum(f.in)) return 'Check-out has to be after check-in.';
-    if (f.by === 'agent' && (f.total == null || !(f.total > 0))) return 'Enter the total for the stay, so the commission can be worked out.';
     const clash = S.bookings.find(b => (!editing || b.id !== editing.id) && dayNum(b.in) < dayNum(f.out) && dayNum(f.in) < dayNum(b.out));
     if (clash) return 'Those dates overlap ' + label(clash.by) + ', ' + fmtRange(clash) + '. Edit that stay instead, or pick other dates.';
     return '';
@@ -370,11 +350,8 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
     const form = document.getElementById('stay-form');
     if (!form) return;
     const f = readForm();
-    form.querySelectorAll('.agent-only').forEach(el => { el.hidden = f.by !== 'agent'; });
-    const parts = [];
-    if (f.in && f.out && dayNum(f.out) > dayNum(f.in)) { const n = dayNum(f.out) - dayNum(f.in); parts.push('<b>' + n + (n === 1 ? ' night' : ' nights') + '</b>'); }
-    if (f.by === 'agent' && f.total > 0) parts.push(esc(S.agentName) + '’s ' + esc(S.rate) + '%: <b>' + money(Math.round(f.total * S.rate) / 100) + '</b>');
-    document.getElementById('f-calc').innerHTML = parts.join(' · ');
+    const n = f.in && f.out ? dayNum(f.out) - dayNum(f.in) : 0;
+    document.getElementById('f-calc').innerHTML = n > 0 ? '<b>' + n + (n === 1 ? ' night' : ' nights') + '</b>' : '';
   }
 
   // ---------------------------------------------------------------- loading and saving
@@ -493,13 +470,12 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       (upcoming.length ? upcoming.map(stayHTML).join('') : '<div class="empty">' + (canWrite ? 'No upcoming stays. Add one with Add booking, or tap a date on the calendar.' : 'No upcoming stays are booked yet.') + '</div>') +
       '</div>' + (past.length ? '<details class="past"><summary>Past stays (' + past.length + ')</summary><div class="list">' + past.map(stayHTML).join('') + '</div></details>' : '') + '</section>' +
       (canWrite ? settingsHTML() : '') +
-      '<p class="foot">' + (canWrite ? 'Everyone with the link or the access code sees every date and note here, and the totals and commission on ' + esc(S.agentName) + '’s stays.' :
+      '<p class="foot">' + (canWrite ? 'Everyone with the link or the access code sees every date and note here.' :
         'Dates shown here are booked or blocked. A check-out day is free for a new check-in.') + '</p>' +
       ownerHTML() + '</div>';
     if (draft && canWrite && panelOpen) {
       const v = id => document.getElementById(id);
       v('f-in').value = draft.in; v('f-out').value = draft.out; v('f-by').value = draft.by; v('f-guest').value = draft.guest;
-      v('f-total').value = draft.total == null ? '' : draft.total; v('f-paid').checked = draft.paid;
     }
     updateCalc();
     if (keep && document.getElementById(keep)) document.getElementById(keep).focus();
@@ -579,14 +555,13 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       const next = JSON.parse(JSON.stringify(S));
       const row = { id: editing && editing.id ? editing.id : 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                     in: f.in, out: f.out, by: f.by, guest: f.guest };
-      if (f.by === 'agent') { row.total = f.total; row.paid = f.paid; }
       next.bookings = next.bookings.filter(b => b.id !== row.id).concat([row]);
       save(next);
     } else if (id === 'settings-form') {
-      const name = document.getElementById('s-agent').value.trim(), rate = +document.getElementById('s-rate').value;
-      if (!name || !(rate >= 0 && rate <= 100)) return;
+      const name = document.getElementById('s-agent').value.trim();
+      if (!name) return;
       const next = JSON.parse(JSON.stringify(S));
-      next.agentName = name; next.rate = rate;
+      next.agentName = name;
       save(next);
     } else if (id === 'code-form') {
       const a = document.getElementById('c-new').value, b = document.getElementById('c-again').value;
