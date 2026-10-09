@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HgpqJg8SnmqHvpL5EBqKxXlviO8CWAn/xfYa4aVlmbA='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ANIAp6nAPP6BHBZZgPv4m3b3Soyd/lcBczybwDx5bRk='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#F7F4EC" media="(prefers-color-scheme: light)">
@@ -148,6 +148,7 @@ a { color: var(--brass); text-underline-offset: 3px; }
 .linkish { background: none; border: 0; padding: 0; color: var(--brass); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
 .share { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 button.day { display: flex; align-items: flex-start; justify-content: flex-start; }   /* buttons centre their label; keep the date at the top, clear of the stay bars */
+.share + p { margin-top: 20px; }
 .share code { flex: 1 1 260px; min-width: 0; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; }
 </style>
 </head>
@@ -158,7 +159,8 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
   'use strict';
   // The Emerald's booking calendar. The bookings live in data.json beside this page, encrypted with an access code:
   // anyone with the code (or a link that carries it after the #) can read them. The owner saves changes straight to
-  // the GitHub repository that hosts the site, with a GitHub token kept only in their own browser.
+  // the GitHub repository that hosts the site, with a GitHub token kept only in their own browser; the owner's editing
+  // link carries that token after the # too, so opening it on another device lets that device edit.
   const CONFIG = { owner: 'aaronarmada', repo: 'emerald-bookings', path: 'data.json', branch: 'main' };
   const API = 'https://api.github.com/repos/' + CONFIG.owner + '/' + CONFIG.repo + '/contents/' + CONFIG.path;
   const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new?name=Emerald+bookings&description=Saves+changes+to+the+Emerald+booking+calendar&target_name=' +
@@ -196,7 +198,7 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
   }
 
   // ---------------------------------------------------------------- state
-  let S = null, file = null, code = null, token = null, sha = null, lastLoad = 0;
+  let S = null, file = null, code = null, token = null, sha = null, lastLoad = 0, pendingToken = null;
   let canWrite = false, editing = null, confirmDelete = null, saving = false, status = '', panelOpen = false;
   let lockMsg = '', ownerOpen = false, ownerMsg = '', loadError = '';
   const normalize = s => ({ agentName: s.agentName || 'Agent',   // availability only: older saves' money fields are dropped
@@ -219,7 +221,8 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const label = by => by === 'agent' ? S.agentName : by === 'blocked' ? 'Blocked' : 'Direct';
   const sorted = () => S.bookings.slice().sort((x, y) => dayNum(x.in) - dayNum(y.in));
-  const shareLink = () => location.origin + location.pathname + '#' + showCode(code);
+  const viewLink = () => location.origin + location.pathname + '#' + encodeURIComponent(showCode(code));
+  const editLink = () => viewLink() + '&edit=' + encodeURIComponent(token);
   const now = new Date();
   let startMonth = store.get('start', now.getFullYear() * 12 + now.getMonth());   // months since year 0
 
@@ -311,8 +314,12 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
 
   function settingsHTML() {
     return '<section class="panel settings" aria-label="Sharing"><h2>Sharing</h2>' +
-      '<p>Send this link to anyone who should see the calendar; it opens straight in. The address without the part after # asks for the access code, <b>' + esc(showCode(code)) + '</b>.</p>' +
-      '<div class="share"><code id="share-link">' + esc(shareLink()) + '</code><button type="button" class="btn small ghost" data-act="copy">Copy link</button></div></section>' +
+      '<p><b>Link for ' + esc(S.agentName) + '</b>, view only. It opens straight to the calendar; the address without the part after # asks for the access code, <b>' + esc(showCode(code)) + '</b>.</p>' +
+      '<div class="share"><code id="share-link">' + esc(viewLink()) + '</code><button type="button" class="btn small ghost" data-act="copy">Copy link</button></div>' +
+      '<p><b>Your editing link.</b> Open it once on each of your devices and they can edit, with no token or password. Keep it to yourself: anyone with it can change the calendar.</p>' +
+      '<div class="share"><button type="button" class="btn small" data-act="copy-edit">Copy editing link</button>' +
+      (navigator.share ? '<button type="button" class="btn small ghost" data-act="share-edit">Share…</button>' : '') +
+      '<code id="edit-link" hidden>' + esc(editLink()) + '</code></div></section>' +
       '<form class="panel settings" id="settings-form" novalidate><h2>Settings</h2><div class="fields">' +
       '<div class="field"><label for="s-agent">Agent’s name</label><input id="s-agent" type="text" maxlength="40" value="' + esc(S.agentName) + '"></div>' +
       '</div><div class="panel-actions"><button type="submit" class="btn ghost"' + (saving ? ' disabled' : '') + '>Save settings</button></div></form>' +
@@ -326,8 +333,9 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
     if (canWrite) return '<section class="owner"><button type="button" class="linkish" data-act="sign-out">Stop editing on this device</button></section>';
     if (!ownerOpen) return '<section class="owner"><button type="button" class="linkish" data-act="owner">Owner sign-in</button></section>';
     return '<form class="panel owner" id="owner-form" novalidate><h2>Owner sign-in</h2>' +
-      '<p>Editing needs a GitHub token that can save to <b>' + esc(CONFIG.owner + '/' + CONFIG.repo) + '</b>. <a href="' + esc(TOKEN_URL) + '" target="_blank" rel="noopener noreferrer">Create one on GitHub</a>; ' +
-      'it opens filled in. Under Repository access, choose <b>Only select repositories</b> and pick <b>' + esc(CONFIG.repo) + '</b>, then click Generate token and paste it here. It stays in this browser.</p>' +
+      '<p>To edit on this device, open your <b>editing link</b> here. It’s under Sharing on any device that can already edit.</p>' +
+      '<p>No editing link yet, or it stopped working? Paste a GitHub token that can save to <b>' + esc(CONFIG.owner + '/' + CONFIG.repo) + '</b>. <a href="' + esc(TOKEN_URL) + '" target="_blank" rel="noopener noreferrer">Create one on GitHub</a>; ' +
+      'it opens filled in. Under Repository access, choose <b>Only select repositories</b> and pick <b>' + esc(CONFIG.repo) + '</b>, then click Generate token and paste it here.</p>' +
       '<div class="fields"><div class="field"><label for="o-token">GitHub token</label><input id="o-token" type="password" autocomplete="off" spellcheck="false"></div></div>' +
       '<div class="msg" role="alert">' + esc(ownerMsg) + '</div><div class="panel-actions"><button type="submit" class="btn">Sign in</button>' +
       '<button type="button" class="btn ghost" data-act="owner-cancel">Cancel</button></div></form>';
@@ -387,9 +395,9 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
     } catch (e) {
       const refused = e && (e.status === 401 || e.status === 403 || e.status === 404);
       canWrite = false; token = null; sha = null; ownerOpen = true;
-      if (refused) store.del('token');   // a dropped connection keeps the saved token for next time
+      if (refused && store.get('token', null) === t) store.del('token');   // a dropped connection keeps the saved token for next time
       ownerMsg = refused
-        ? 'GitHub didn’t accept that token for ' + CONFIG.owner + '/' + CONFIG.repo + '. Check that it has Contents: Read and write on that repository.'
+        ? 'GitHub didn’t accept that token or editing link. Paste a token that can save to ' + CONFIG.owner + '/' + CONFIG.repo + ' below.'
         : e && e.name === 'OperationError'
           ? 'The access code changed a moment ago. Reload the page in a minute and enter the new code.'
           : 'Couldn’t reach GitHub. Check your connection and try again.';
@@ -504,12 +512,20 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
     if (act === 'owner') { ownerOpen = true; ownerMsg = ''; render(); const i = document.getElementById('o-token'); if (i) i.focus(); return; }
     if (act === 'owner-cancel') { ownerOpen = false; render(); return; }
     if (!canWrite) return;
-    if (act === 'copy') {
+    if (act === 'copy' || act === 'copy-edit') {
+      const view = act === 'copy', label = view ? 'Copy link' : 'Copy editing link';
       let copied = false;
-      try { await navigator.clipboard.writeText(shareLink()); copied = true; } catch (err) { /* select it instead */ }
-      if (!copied) { const r = document.createRange(); r.selectNodeContents(document.getElementById('share-link')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      try { await navigator.clipboard.writeText(view ? viewLink() : editLink()); copied = true; } catch (err) { /* show it to copy by hand */ }
+      if (!copied) {
+        const el = document.getElementById(view ? 'share-link' : 'edit-link');
+        el.hidden = false;
+        const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      }
       t.textContent = copied ? 'Copied' : 'Selected, copy it';
-      setTimeout(() => { if (t.isConnected) t.textContent = 'Copy link'; }, 2000);
+      setTimeout(() => { if (t.isConnected) t.textContent = label; }, 2000);
+    }
+    else if (act === 'share-edit') {
+      try { await navigator.share({ title: 'The Emerald Bookings (editing)', url: editLink() }); } catch (err) { /* share sheet closed */ }
     }
     else if (act === 'sign-out') { canWrite = false; token = null; sha = null; store.del('token'); panelOpen = false; status = ''; render(); }
     else if (act === 'add') { editing = null; panelOpen = true; status = ''; render(); document.getElementById('f-in').focus(); }
@@ -535,7 +551,11 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       if (!normCode(tried)) return;
       lockMsg = 'Opening…'; renderLock();
       if (!(await tryCode(tried))) lockMsg = 'That code didn’t open the calendar. Check it and try again.';
-      else if (store.get('token', null)) await signInOwner(store.get('token', null));
+      else {
+        const t = pendingToken || store.get('token', null);
+        pendingToken = null;
+        if (t) await signInOwner(t);
+      }
       render();
       return;
     }
@@ -544,6 +564,7 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       if (!t) return;
       ownerMsg = 'Checking…'; render();
       await signInOwner(t);
+      if (canWrite) status = 'This device can edit now. For your other devices, send yourself the editing link under Sharing.';
       render();
       return;
     }
@@ -569,7 +590,7 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       if (normCode(a).length < 10) { msg.textContent = 'Use at least 10 letters or digits.'; return; }
       if (normCode(a) !== normCode(b)) { msg.textContent = 'The two entries don’t match.'; return; }
       const ok = await save(JSON.parse(JSON.stringify(S)), a);
-      if (ok) status = 'Access code changed. Copy the new link under Sharing and send it on.';
+      if (ok) status = 'Access code changed. Copy the new links under Sharing and send them on.';
       render();
     }
   });
@@ -588,9 +609,14 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
 
   // ---------------------------------------------------------------- start
   (async () => {
-    let fromLink = '';
-    if (location.hash.length > 1) {   // a shared link carries the code after the #, which never leaves this browser
-      try { fromLink = decodeURIComponent(location.hash.slice(1)); } catch (e) { fromLink = location.hash.slice(1); }
+    // A shared link carries the code after the #, and the owner's editing link the token as well (#CODE&edit=TOKEN).
+    // The part after the # never leaves this browser, and it is cleared from the address bar straight away.
+    let fromLink = '', linkToken = '';
+    if (location.hash.length > 1) {
+      const parts = location.hash.slice(1).split('&').map(p => { try { return decodeURIComponent(p); } catch (e) { return p; } });
+      fromLink = parts[0];
+      const ed = parts.find(p => p.startsWith('edit='));
+      if (ed) linkToken = ed.slice(5).trim();
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* leave the address as it is */ }
     }
     try { file = await loadPublished(); }
@@ -600,8 +626,10 @@ button.day { display: flex; align-items: flex-start; justify-content: flex-start
       const saved = store.get('code', null);
       if (saved && !(await tryCode(saved))) { store.del('code'); if (!fromLink) lockMsg = 'The access code has changed. Enter the new one.'; }
     }
-    const t = store.get('token', null);
-    if (S && t) await signInOwner(t);
+    const saved = store.get('token', null);
+    if (S && linkToken) { await signInOwner(linkToken); if (canWrite) status = 'This device can edit now.'; }
+    if (S && !canWrite && saved && saved !== linkToken) await signInOwner(saved);
+    if (!S && linkToken) pendingToken = linkToken;   // the code in the link was out of date: use the token once a code opens the calendar
     render();
   })();
 })();
